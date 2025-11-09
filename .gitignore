@@ -1,0 +1,7 @@
+.gitattributes
+compile_*
+.vscode
+*.def
+*.exe
+viewer
+viewer_debug

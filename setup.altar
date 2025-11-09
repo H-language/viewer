@@ -1,0 +1,6 @@
+framework
+	H-language/C7H16
+
+libraries
+	ENDESGA/pep
+	nothings/stb
