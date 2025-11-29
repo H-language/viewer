@@ -54,37 +54,9 @@ object_fn( window, main_tick )
 	temp i4 mx = this->mouse_x;
 	temp i4 my = this->mouse_y;
 
-	if( key_pressed( 1 ) )
-	{
-		main_window_canvas->scaling = scaling_manual;
-		refresh = yes;
-	}
-	else if( key_pressed( 2 ) )
-	{
-		main_window_canvas->scaling = scaling_rational_fit;
-		_window_resize( this );
-		refresh = yes;
-	}
-	else if( key_pressed( 3 ) )
-	{
-		main_window_canvas->scaling = scaling_rational_fill;
-		_window_resize( this );
-		refresh = yes;
-	}
-	else if( key_pressed( 4 ) )
-	{
-		main_window_canvas->scaling = scaling_rational_stretch;
-		_window_resize( this );
-		refresh = yes;
-	}
-
-	if( key_pressed( escape ) )
-	{
-		window_toggle_border( this );
-		refresh = yes;
-	}
-
 	temp scaling_mode const scaling = main_window_canvas->scaling;
+	temp const i4 scaled_w = i4( r4_round( r4( main_window_canvas->canvas->size.w ) * main_window_canvas->scale.w ) );
+	temp const i4 scaled_h = i4( r4_round( r4( main_window_canvas->canvas->size.h ) * main_window_canvas->scale.h ) );
 
 	if( scaling isnt scaling_rational_stretch )
 	{
@@ -130,9 +102,6 @@ object_fn( window, main_tick )
 		refresh = yes;
 	}
 
-	temp const i4 scaled_w = i4( r4_round( r4( main_window_canvas->canvas->size.w ) * main_window_canvas->scale.w ) );
-	temp const i4 scaled_h = i4( r4_round( r4( main_window_canvas->canvas->size.h ) * main_window_canvas->scale.h ) );
-
 	with( scaling )
 	{
 		when( scaling_rational_fit, scaling_integer_fit_floor, scaling_integer_fit_round, scaling_integer_fit_ceil )
@@ -165,6 +134,76 @@ object_fn( window, main_tick )
 		}
 
 		other skip;
+	}
+
+	if( key_pressed( 1 ) )
+	{
+		main_window_canvas->scaling = scaling_manual;
+		refresh = yes;
+	}
+	else if( key_pressed( 2 ) or key_pressed( 3 ) )
+	{
+		if( key_pressed( 2 ) )
+		{
+			main_window_canvas->scaling = scaling_rational_fit;
+		}
+		else
+		{
+			main_window_canvas->scaling = scaling_rational_fill;
+		}
+
+		_window_resize( this );
+		temp i4 const new_scaled_w = i4( r4_round( r4( main_window_canvas->canvas->size.w ) * main_window_canvas->scale.w ) );
+		temp i4 const new_scaled_h = i4( r4_round( r4( main_window_canvas->canvas->size.h ) * main_window_canvas->scale.h ) );
+		main_window_canvas->pos.x = ( this->size.w - new_scaled_w ) / 2;
+		main_window_canvas->pos.y = ( this->size.h - new_scaled_h ) / 2;
+		refresh = yes;
+	}
+	else if( key_pressed( 4 ) )
+	{
+		main_window_canvas->scaling = scaling_rational_stretch;
+		_window_resize( this );
+		main_window_canvas->pos.x = 0;
+		main_window_canvas->pos.y = 0;
+		refresh = yes;
+	}
+
+	if( key_pressed( escape ) )
+	{
+		window_toggle_border( this );
+		refresh = yes;
+	}
+
+	if( key_pressed( tab ) )
+	{
+		if( scaling is scaling_manual )
+		{
+			temp flag const fits_exactly = scaled_w is this->size.w and scaled_h is this->size.h;
+
+			i4 win_x;
+			i4 win_y;
+			window_get_position( this, ref_of( win_x ), ref_of( win_y ) );
+
+			if( fits_exactly )
+			{
+				temp i4 const disp_w = display_get_width();
+				temp i4 const disp_h = display_get_height();
+
+				window_set_size( this, disp_w, disp_h );
+				window_set_position( this, 0, 0 );
+				main_window_canvas->pos.x = ( disp_w - scaled_w ) / 2;
+				main_window_canvas->pos.y = ( disp_h - scaled_h ) / 2;
+			}
+			else
+			{
+				window_set_size( this, scaled_w, scaled_h );
+				window_set_position( this, win_x + main_window_canvas->pos.x, win_y + main_window_canvas->pos.y );
+				main_window_canvas->pos.x = 0;
+				main_window_canvas->pos.y = 0;
+			}
+
+			refresh = yes;
+		}
 	}
 
 	if( refresh ) window_refresh( this );
@@ -216,13 +255,26 @@ start
 	windows_fps_tick = 0;
 	windows_fps_draw = 0;
 
-	width = MIN( width, display_get_width() );
-	height = MIN( height, display_get_height() );
+	temp i4 const disp_w = display_get_width();
+	temp i4 const disp_h = display_get_height();
 
-	new_window( pick( start_parameters[ 1 ] isnt nothing, start_parameters[ 1 ], "viewer" ), width, height );
+	temp r4 scale = 1.0;
+	if( width > disp_w or height > disp_h )
+	{
+		temp r4 const scale_w = r4( disp_w ) / r4( width );
+		temp r4 const scale_h = r4( disp_h ) / r4( height );
+		scale = r4_min( scale_w, scale_h );
+	}
+
+	temp i4 const win_w = i4( r4_round( r4( width ) * scale ) );
+	temp i4 const win_h = i4( r4_round( r4( height ) * scale ) );
+
+	new_window( pick( start_parameters[ 1 ] isnt nothing, path_get_name( start_parameters[ 1 ] ), "viewer" ), win_w, win_h );
 	window_set_fn_tick( current_window, window_main_tick );
 	current_window->clear_before_present = yes;
 
 	main_window_canvas = new_window_canvas( image, sizing_fixed, scaling_manual, nothing );
+	main_window_canvas->scale.w = scale;
+	main_window_canvas->scale.h = scale;
 	window_add_window_canvas( current_window, main_window_canvas );
 }
