@@ -37,52 +37,137 @@
 ////////////////////////////////////////////////////////////////
 
 global canvas image;
+global window_canvas main_window_canvas = nothing;
 
-object_fn( window, input )
+object_fn( window, main_tick )
 {
 	temp flag refresh = no;
 	perm i4 drag_start_x;
 	perm i4 drag_start_y;
 	perm i4 drag_offset_start_x;
 	perm i4 drag_offset_start_y;
+	perm i4 window_drag_start_x;
+	perm i4 window_drag_start_y;
+	perm i4 window_start_x;
+	perm i4 window_start_y;
 
 	temp i4 mx = this->mouse_x;
 	temp i4 my = this->mouse_y;
 
-	if( mouse_left_pressed() )
+	if( key_pressed( 1 ) )
 	{
-		drag_start_x = mx;
-		drag_start_y = my;
-		drag_offset_start_x = this->draw_offset.x;
-		drag_offset_start_y = this->draw_offset.y;
+		main_window_canvas->scaling = scaling_manual;
+		refresh = yes;
 	}
-	else if( mouse_left_held() )
+	else if( key_pressed( 2 ) )
 	{
-		this->draw_offset.x = drag_offset_start_x + ( mx - drag_start_x );
-		this->draw_offset.y = drag_offset_start_y + ( my - drag_start_y );
+		main_window_canvas->scaling = scaling_rational_fit;
+		_window_resize( this );
+		refresh = yes;
+	}
+	else if( key_pressed( 3 ) )
+	{
+		main_window_canvas->scaling = scaling_rational_fill;
+		_window_resize( this );
+		refresh = yes;
+	}
+	else if( key_pressed( 4 ) )
+	{
+		main_window_canvas->scaling = scaling_rational_stretch;
+		_window_resize( this );
 		refresh = yes;
 	}
 
-	temp const i2 scaled_w = this->buffer.size.w * this->scale;
-	temp const i2 scaled_h = this->buffer.size.h * this->scale;
+	if( key_pressed( escape ) )
+	{
+		window_toggle_border( this );
+		refresh = yes;
+	}
 
-	temp const i2 delta_w = ( ( i2( this->buffer.size.w ) - i2( image.size.w ) + 1 ) / 2 ) * this->scale;
-	temp const i2 delta_h = ( ( i2( this->buffer.size.h ) - i2( image.size.h ) + 1 ) / 2 ) * this->scale;
+	temp scaling_mode const scaling = main_window_canvas->scaling;
 
-	temp const i2 half_w = this->size_target.w / 2;
-	temp const i2 half_h = this->size_target.h / 2;
+	if( scaling isnt scaling_rational_stretch )
+	{
+		if( mouse_pressed( left ) )
+		{
+			drag_start_x = mx;
+			drag_start_y = my;
+			drag_offset_start_x = main_window_canvas->pos.x;
+			drag_offset_start_y = main_window_canvas->pos.y;
+		}
+		else if( mouse_held( left ) )
+		{
+			main_window_canvas->pos.x = drag_offset_start_x + ( mx - drag_start_x );
+			main_window_canvas->pos.y = drag_offset_start_y + ( my - drag_start_y );
+			refresh = yes;
+		}
+	}
 
-	this->draw_offset.x = i2_clamp( this->draw_offset.x, -scaled_w + half_w + delta_w, this->size_target.w - half_w - delta_w );
-	this->draw_offset.y = i2_clamp( this->draw_offset.y, -scaled_h + half_h + delta_h, this->size_target.h - half_h - delta_h );
+	if( mouse_pressed( right ) )
+	{
+		display_get_mouse_position( ref_of( window_drag_start_x ), ref_of( window_drag_start_y ) );
+		window_get_position( this, ref_of( window_start_x ), ref_of( window_start_y ) );
+	}
+	else if( mouse_held( right ) )
+	{
+		i4 screen_mx,
+		screen_my;
+		display_get_mouse_position( ref_of( screen_mx ), ref_of( screen_my ) );
+		window_set_position( this, window_start_x + ( screen_mx - window_drag_start_x ), window_start_y + ( screen_my - window_drag_start_y ) );
+	}
+
+	if( scaling is scaling_manual and this->scroll.y isnt 0 )
+	{
+		temp r4 const scale_factor = r4_pow( 1.2, this->scroll.y );
+		temp r4 const new_scale = r4_clamp( main_window_canvas->scale.w * scale_factor, 0.2, 200.0 );
+		temp r4 const actual_factor = new_scale / main_window_canvas->scale.w;
+
+		main_window_canvas->pos.x = i4( r4_round( r4( mx ) - r4( mx - main_window_canvas->pos.x ) * actual_factor ) );
+		main_window_canvas->pos.y = i4( r4_round( r4( my ) - r4( my - main_window_canvas->pos.y ) * actual_factor ) );
+
+		main_window_canvas->scale.w = new_scale;
+		main_window_canvas->scale.h = new_scale;
+		refresh = yes;
+	}
+
+	temp const i4 scaled_w = i4( r4_round( r4( main_window_canvas->canvas->size.w ) * main_window_canvas->scale.w ) );
+	temp const i4 scaled_h = i4( r4_round( r4( main_window_canvas->canvas->size.h ) * main_window_canvas->scale.h ) );
+
+	with( scaling )
+	{
+		when( scaling_rational_fit, scaling_integer_fit_floor, scaling_integer_fit_round, scaling_integer_fit_ceil )
+		{
+			main_window_canvas->pos.x = i4_clamp( main_window_canvas->pos.x, 0, this->size.w - scaled_w );
+			main_window_canvas->pos.y = i4_clamp( main_window_canvas->pos.y, 0, this->size.h - scaled_h );
+			skip;
+		}
+
+		when( scaling_rational_fill, scaling_integer_fill_floor, scaling_integer_fill_round, scaling_integer_fill_ceil )
+		{
+			main_window_canvas->pos.x = i4_clamp( main_window_canvas->pos.x, this->size.w - scaled_w, 0 );
+			main_window_canvas->pos.y = i4_clamp( main_window_canvas->pos.y, this->size.h - scaled_h, 0 );
+			skip;
+		}
+
+		when( scaling_rational_stretch )
+		{
+			main_window_canvas->pos.x = 0;
+			main_window_canvas->pos.y = 0;
+			skip;
+		}
+
+		when( scaling_manual )
+		{
+			temp const i4 half = i4_min( this->size.w / 4, this->size.h / 4 );
+			main_window_canvas->pos.x = i4_clamp( main_window_canvas->pos.x, -scaled_w + half, this->size.w - half );
+			main_window_canvas->pos.y = i4_clamp( main_window_canvas->pos.y, -scaled_h + half, this->size.h - half );
+			skip;
+		}
+
+		other skip;
+	}
 
 	if( refresh ) window_refresh( this );
-}
-
-object_fn( window, draw )
-{
-	canvas_clear( this->buffer );
-	canvas_fill( this->buffer, pixel(0x77,0,0x22,0xff));
-	canvas_draw_canvas_safe( this->buffer, image, ( i2( this->buffer.size.w ) - i2( image.size.w ) + 1 ) / 2, ( i2( this->buffer.size.h ) - i2( image.size.h ) + 1 ) / 2 );
 }
 
 start
@@ -94,40 +179,50 @@ start
 	{
 		width = 200;
 		height = 200;
-		image = canvas( width, height );
+		image = new_canvas( width, height );
 		canvas_fill( image, pixel( 0xff, 0, 0x44, 0xff ) );
 	}
 	else
 	{
-		const byte const_ref input = start_parameters[ 1 ];
+		byte ref const input = to( byte ref const, start_parameters[ 1 ] );
 
 		byte ref path_ext = path_get_extension( input );
 
 		if( bytes_compare( path_ext, "pep", 4 ) is 0 )
 		{
 			pep loaded_pep = pep_load( input );
-			image.pixels = to( pixel ref, pep_decompress( ref_of( loaded_pep ), pep_bgra, 0 ) );
+			image->pixels = to( pixel ref, pep_decompress( ref_of( loaded_pep ), pep_bgra, 0 ) );
 			pep_free( ref_of( loaded_pep ) );
-			image.size.w = loaded_pep.width;
-			image.size.h = loaded_pep.height;
-			width = image.size.w;
-			height = image.size.h;
+			image->size.w = loaded_pep.width;
+			image->size.h = loaded_pep.height;
+			width = image->size.w;
+			height = image->size.h;
 		}
 		else
 		{
 			i4 channels;
-			temp const byte const_ref loaded_bytes = to( const byte const_ref, stbi_load( input, ref_of( width ), ref_of( height ), ref_of( channels ), 4 ) );
-			image = canvas( width, height );
+			temp byte const ref const loaded_bytes = to( byte const ref const, stbi_load( input, ref_of( width ), ref_of( height ), ref_of( channels ), 4 ) );
+			image = new_canvas( width, height );
 			iter( index, width * height )
 			{
 				temp const int byte_index = index << 2;
-				canvas_draw_pixel_index( image, index, pixel( loaded_bytes[ byte_index ], loaded_bytes[ byte_index + 1 ], loaded_bytes[ byte_index + 2 ], loaded_bytes[ byte_index + 3 ] ) );
+				canvas_set_pixel_index( image, index, pixel( loaded_bytes[ byte_index ], loaded_bytes[ byte_index + 1 ], loaded_bytes[ byte_index + 2 ], loaded_bytes[ byte_index + 3 ] ) );
 			}
 		}
 	}
 
-	new_window( width, height );
-	window_set_draw_fn( current_window, window_draw );
-	window_set_input_fn( current_window, window_input );
-	window_set_buffer_max( current_window, width, height );
+	//
+
+	windows_fps_tick = 0;
+	windows_fps_draw = 0;
+
+	width = MIN( width, display_get_width() );
+	height = MIN( height, display_get_height() );
+
+	new_window( pick( start_parameters[ 1 ] isnt nothing, start_parameters[ 1 ], "viewer" ), width, height );
+	window_set_fn_tick( current_window, window_main_tick );
+	current_window->clear_before_present = yes;
+
+	main_window_canvas = new_window_canvas( image, sizing_fixed, scaling_manual, nothing );
+	window_add_window_canvas( current_window, main_window_canvas );
 }
