@@ -54,20 +54,23 @@ object_fn( window, main_tick )
 	temp i4 mx = this->mouse_x;
 	temp i4 my = this->mouse_y;
 
+	temp i4 const display_w = display_get_width();
+	temp i4 const display_h = display_get_height();
+
 	temp scaling_mode const scaling = main_window_canvas->scaling;
 	temp const i4 scaled_w = i4( r4_round( r4( main_window_canvas->canvas->size.w ) * main_window_canvas->scale.w ) );
 	temp const i4 scaled_h = i4( r4_round( r4( main_window_canvas->canvas->size.h ) * main_window_canvas->scale.h ) );
 
 	if( scaling isnt scaling_rational_stretch )
 	{
-		if( mouse_pressed( left ) )
+		if( mouse_pressed( middle ) )
 		{
 			drag_start_x = mx;
 			drag_start_y = my;
 			drag_offset_start_x = main_window_canvas->pos.x;
 			drag_offset_start_y = main_window_canvas->pos.y;
 		}
-		else if( mouse_held( left ) )
+		else if( mouse_held( middle ) )
 		{
 			main_window_canvas->pos.x = drag_offset_start_x + ( mx - drag_start_x );
 			main_window_canvas->pos.y = drag_offset_start_y + ( my - drag_start_y );
@@ -176,34 +179,38 @@ object_fn( window, main_tick )
 
 	if( key_pressed( tab ) )
 	{
-		if( scaling is scaling_manual )
+		temp flag const fits_exactly = scaled_w is this->size.w and scaled_h is this->size.h;
+
+		i4 win_x;
+		i4 win_y;
+		window_get_position( this, ref_of( win_x ), ref_of( win_y ) );
+
+		if( fits_exactly )
 		{
-			temp flag const fits_exactly = scaled_w is this->size.w and scaled_h is this->size.h;
-
-			i4 win_x;
-			i4 win_y;
-			window_get_position( this, ref_of( win_x ), ref_of( win_y ) );
-
-			if( fits_exactly )
-			{
-				temp i4 const disp_w = display_get_width();
-				temp i4 const disp_h = display_get_height();
-
-				window_set_size( this, disp_w, disp_h );
-				window_set_position( this, 0, 0 );
-				main_window_canvas->pos.x = ( disp_w - scaled_w ) / 2;
-				main_window_canvas->pos.y = ( disp_h - scaled_h ) / 2;
-			}
-			else
-			{
-				window_set_size( this, scaled_w, scaled_h );
-				window_set_position( this, win_x + main_window_canvas->pos.x, win_y + main_window_canvas->pos.y );
-				main_window_canvas->pos.x = 0;
-				main_window_canvas->pos.y = 0;
-			}
-
-			refresh = yes;
+			window_set_size( this, display_w, display_h );
+			window_set_position( this, 0, 0 );
+			main_window_canvas->pos.x = ( display_w - scaled_w ) / 2;
+			main_window_canvas->pos.y = ( display_h - scaled_h ) / 2;
 		}
+		else
+		{
+			temp i4 const new_win_w = i4_min( scaled_w, display_w );
+			temp i4 const new_win_h = i4_min( scaled_h, display_h );
+
+			temp i4 new_win_x = win_x + main_window_canvas->pos.x;
+			temp i4 new_win_y = win_y + main_window_canvas->pos.y;
+
+			new_win_x = i4_clamp( new_win_x, 0, display_w - new_win_w );
+			new_win_y = i4_clamp( new_win_y, 0, display_h - new_win_h );
+
+			window_set_size( this, new_win_w, new_win_h );
+			window_set_position( this, new_win_x, new_win_y );
+
+			main_window_canvas->pos.x = ( new_win_w - scaled_w ) / 2;
+			main_window_canvas->pos.y = ( new_win_h - scaled_h ) / 2;
+		}
+
+		refresh = yes;
 	}
 
 	if( refresh ) window_refresh( this );
@@ -230,6 +237,7 @@ start
 		if( bytes_compare( path_ext, "pep", 4 ) is 0 )
 		{
 			pep loaded_pep = pep_load( input );
+			image = new_object( canvas );
 			image->pixels = to( pixel ref, pep_decompress( ref_of( loaded_pep ), pep_bgra, 0 ) );
 			pep_free( ref_of( loaded_pep ) );
 			image->size.w = loaded_pep.width;
