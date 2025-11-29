@@ -65,7 +65,6 @@ object_fn( window, main_tick )
 	perm i4x2 canvas_offset_start;
 
 	temp flag refresh = no;
-	temp i4x2 const mouse = i4x2( this->mouse_x, this->mouse_y );
 	temp i4 const display_w = display_get_width();
 	temp i4 const display_h = display_get_height();
 
@@ -86,21 +85,22 @@ object_fn( window, main_tick )
 	{
 		if( mouse_pressed( middle ) )
 		{
-			canvas_drag_start_x = mouse.x;
-			canvas_drag_start_y = mouse.y;
+			canvas_drag_start_x = this->mouse_x;
+			canvas_drag_start_y = this->mouse_y;
 			canvas_offset_start = main_window_canvas->pos;
+			main_window_canvas->scaling = scaling_manual;
 		}
 		else if( mouse_held( middle ) )
 		{
-			main_window_canvas->pos.x = canvas_offset_start.x + mouse.x - canvas_drag_start_x;
-			main_window_canvas->pos.y = canvas_offset_start.y + mouse.y - canvas_drag_start_y;
+			main_window_canvas->pos.x = canvas_offset_start.x + this->mouse_x - canvas_drag_start_x;
+			main_window_canvas->pos.y = canvas_offset_start.y + this->mouse_y - canvas_drag_start_y;
 			refresh = yes;
 		}
 	}
 
 	if( this->scroll.y isnt 0 )
 	{
-		window_canvas_zoom( main_window_canvas, mouse, r4_pow( 1.2, this->scroll.y ) );
+		window_canvas_zoom( main_window_canvas, this->mouse_x, this->mouse_y, r4_pow( 1.2, this->scroll.y ) );
 		refresh = yes;
 	}
 
@@ -182,25 +182,11 @@ object_fn( window, main_tick )
 		refresh = yes;
 	}
 
-	with( main_window_canvas->scaling )
-	{
-		when( scaling_rational_stretch )
-		{
-			main_window_canvas->pos = i4x2( 0, 0 );
-			skip;
-		}
-
-		when( scaling_manual )
-		{
-			window_canvas_clamp( main_window_canvas );
-			skip;
-		}
-
-		other skip;
-	}
-
 	if( refresh )
-	window_refresh( this );
+	{
+		window_canvas_clamp( main_window_canvas );
+		window_refresh( this );
+	}
 }
 
 start
