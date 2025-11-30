@@ -72,6 +72,7 @@ object_fn( window, main_tick )
 	{
 		display_get_mouse_position( ref_of( window_drag_start_x ), ref_of( window_drag_start_y ) );
 		window_get_position( this, ref_of( window_start_x ), ref_of( window_start_y ) );
+		windows_fps_tick = 120;
 	}
 	else if( mouse_held( left ) )
 	{
@@ -79,6 +80,10 @@ object_fn( window, main_tick )
 		screen_my;
 		display_get_mouse_position( ref_of( screen_mx ), ref_of( screen_my ) );
 		window_set_position( this, window_start_x + screen_mx - window_drag_start_x, window_start_y + screen_my - window_drag_start_y );
+	}
+	else if( mouse_released( left ) )
+	{
+		windows_fps_tick = 0;
 	}
 
 	if( main_window_canvas->scaling isnt scaling_rational_stretch )
@@ -247,7 +252,7 @@ start
 	temp i4 const win_w = i4( r4_round( r4( width ) * scale ) );
 	temp i4 const win_h = i4( r4_round( r4( height ) * scale ) );
 
-	new_window( pick( start_parameters[ 1 ] isnt nothing, path_get_name( start_parameters[ 1 ] ), "viewer" ), win_w, win_h );
+	new_window( pick( start_parameters[ 1 ] isnt nothing, path_get_name( to( byte ref const, start_parameters[ 1 ] ) ), "viewer" ), win_w, win_h );
 	window_set_fn_resize( current_window, window_main_resize );
 	window_set_fn_tick( current_window, window_main_tick );
 	current_window->clear_before_present = yes;

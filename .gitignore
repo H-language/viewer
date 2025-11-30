@@ -3,5 +3,6 @@ compile_*
 .vscode
 *.def
 *.exe
+*.rc
 viewer
 viewer_debug
